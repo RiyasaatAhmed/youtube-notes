@@ -1,0 +1,193 @@
+---
+description: YouTube Notes App - Business Requirements for AI Coding Agent
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# YouTube Notes App - Business Requirements
+
+## What This App Does
+
+This is a web application that converts YouTube videos into organized, readable notes. Users paste a YouTube link, and the system creates structured notes with key points, timestamps, and summaries.
+
+## Who Will Use This App
+
+- Students who want to study from educational videos
+- Professionals who need to extract information from training videos
+- Content creators who want to summarize their own videos
+- Researchers who need to organize video-based information
+
+## Core Business Value
+
+- Save time by automatically extracting key information from videos
+- Create searchable, organized notes from video content
+- Make video learning more efficient and accessible
+
+## User Types
+
+### Guest Users
+
+- Can see the homepage and understand what the app does
+- Cannot create, save, or access any notes
+- Must sign up to use the app
+
+### Registered Users
+
+- Can create accounts and log in
+- Can create notes from YouTube videos
+- Can view, edit, and delete their own notes
+- Can translate notes to different languages
+- Can download notes in different formats
+- Can search and organize their notes
+
+## Main Features (What Users Can Do)
+
+### 1. User Account Management
+
+**What users need:**
+
+- Create new account with email and password
+- Log in to existing account
+- Log out from their account
+- Update their profile information
+
+**Business rules:**
+
+- Each user must have a unique email
+- Passwords must be strong and secure
+- Users can only access their own notes
+
+### 2. Create Notes from YouTube Videos
+
+**What users need:**
+
+- Paste a YouTube video URL
+- Get automatically generated notes with:
+  - Video title and channel name
+  - Key points and main topics
+  - Timestamps for important sections
+  - Summary of the content
+
+**Business rules:**
+
+- Only valid YouTube URLs are accepted
+- If video has no captions, show a message explaining the limitation
+- Same video URL from same user should not create duplicate notes
+- Notes should be saved to user's account automatically
+
+### 3. View and Manage Notes
+
+**What users need:**
+
+- See a list of all their notes
+- Search through notes by title or content
+- Sort notes by date, title, or channel
+- Open and read individual notes
+
+**Business rules:**
+
+- Only show notes that belong to the logged-in user
+- List should load quickly even with many notes
+- Search should find relevant notes based on content
+
+### 4. Edit Notes
+
+**What users need:**
+
+- Edit the title of notes
+- Add, remove, or modify key points
+- Add personal comments or highlights
+- Save changes to notes
+
+**Business rules:**
+
+- All changes should be saved automatically
+- Keep a history of changes so users can undo if needed
+- Only the note owner can edit their notes
+
+### 5. Delete Notes
+
+**What users need:**
+
+- Delete notes they no longer need
+- Confirm before deleting to prevent accidents
+
+**Business rules:**
+
+- Deleted notes should go to a trash folder first
+- Users should be able to restore notes from trash
+- Notes should be permanently deleted after 30 days in trash
+
+### 6. Translate Notes
+
+**What users need:**
+
+- Translate notes to different languages
+- Keep original and translated versions
+- Switch between different language versions
+
+**Business rules:**
+
+- Show that translations are done by computer (not perfect)
+- Keep the structure and timestamps in translated versions
+- If original note is edited, translation should be marked as outdated
+
+### 7. Download Notes
+
+**What users need:**
+
+- Download notes as files (PDF, Word, or text)
+- Choose which format to download
+- Get files that can be opened on their computer
+
+**Business rules:**
+
+- Files should look good and be easy to read
+- Include video title, channel, and timestamps in downloads
+- Support different languages in downloaded files
+
+## Important Business Rules
+
+### Data and Privacy
+
+- Users own their notes and data
+- When users delete their account, all their notes should be deleted
+- Don't share user notes with other users
+
+### Usage Limits
+
+- Each user can create a reasonable number of notes per day
+- Large files should be handled efficiently
+- Prevent abuse of the system
+
+### Quality and Transparency
+
+- If a video has no captions, clearly tell the user
+- If note quality might be poor, warn the user
+- Always show when content is computer-generated
+
+### International Support
+
+- Support multiple languages for the interface
+- Handle different text directions (left-to-right, right-to-left)
+- Support special characters and emojis
+
+## Success Goals
+
+- Users should be able to create their first note within 2 minutes
+- Notes should be accurate and useful
+- Users should want to come back and create more notes
+- The app should work smoothly even with many notes
+
+## Future Features (Not Required Now)
+
+- Smart highlighting of important quotes
+- Chapter-based summaries
+- Different note styles (bullet points, Q&A format)
+- Sharing notes with other users
+- Mobile app version
+- Browser extension for YouTube
+
+## What This Document Is For
+
+This document tells the coding agent what the app should do from a user's perspective. It focuses on business requirements, not technical implementation details. The agent should use this to understand what features to build and how they should work for users.

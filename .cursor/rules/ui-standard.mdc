@@ -1,0 +1,121 @@
+---
+globs: apps/frontend/app/**/*.tsx,apps/frontend/app/**/*.ts
+alwaysApply: false
+---
+
+# UI/UX Design Standards for AI Coding Agent
+
+## File Structure & Organization
+
+- **@/frontend** - All frontend files and components
+- **@/frontend/components/** - Reusable UI components
+- **@/frontend/pages/** - Page-level components
+- **@/frontend/styles/** - CSS/SCSS files and styling
+- **@/frontend/assets/** - Images, icons, and static assets
+- **@/frontend/utils/** - Frontend utility functions
+- **@/frontend/hooks/** - Custom React hooks
+- **@/frontend/types/** - TypeScript type definitions
+
+## Core Design Principles
+
+### 1. Visual Hierarchy & Layout
+
+- **ALWAYS** establish clear visual hierarchy using size, color, and spacing
+- **MUST** use CSS Grid and Flexbox for responsive layouts
+- **REQUIRED** to use relative units (rem, em, %) instead of fixed pixels
+- **ENSURE** sufficient contrast ratios (minimum 4.5:1 for normal text, 3:1 for large text)
+
+### 2. Responsive Design (Mobile-First)
+
+- **START** with mobile design, then scale up to desktop
+- **IMPLEMENT** these breakpoints: 320px, 768px, 1024px, 1440px
+- **USE** touch-friendly targets (minimum 44x44px)
+- **ENSURE** all interactive elements are accessible on mobile
+
+### 3. Accessibility (WCAG 2.1 AA)
+
+- **MUST** use semantic HTML elements (header, nav, main, section, article, aside, footer)
+- **REQUIRED** to include alt text for all images
+- **ENSURE** keyboard navigation works for all interactive elements
+- **IMPLEMENT** proper ARIA labels and roles
+- **TEST** with screen readers
+
+### 4. Color & Typography
+
+- **USE** a consistent color palette with primary, secondary, and accent colors
+- **IMPLEMENT** proper color contrast for text readability
+- **CHOOSE** readable fonts (system fonts preferred: -apple-system, BlinkMacSystemFont, "Segoe UI")
+- **MAINTAIN** consistent font sizes using rem units
+
+### 5. Component Design Patterns
+
+- **CREATE** reusable components with consistent styling
+- **USE** familiar UI patterns (buttons, forms, cards, modals)
+- **IMPLEMENT** proper hover and focus states
+- **ENSURE** consistent spacing using a design system (8px grid recommended)
+
+### 6. Performance Requirements
+
+- **OPTIMIZE** images with proper srcset and sizes attributes
+- **IMPLEMENT** lazy loading for images and non-critical content
+- **USE** CSS animations instead of JavaScript when possible
+- **MINIMIZE** bundle size with code splitting
+
+### 7. User Experience Guidelines
+
+- **PROVIDE** clear feedback for all user actions (loading states, success/error messages)
+- **IMPLEMENT** intuitive navigation patterns
+- **ENSURE** forms have inline validation and clear error messages
+- **MAINTAIN** consistent terminology throughout the app
+
+## Technical Implementation
+
+### CSS/Styling Standards
+
+- Use CSS custom properties for theming and consistency
+- Use Tailwind CSS utility classes for styling
+- Maintain consistent spacing using 8px grid system
+
+### HTML Structure Requirements
+
+- Use semantic HTML elements for proper structure
+- Include proper ARIA labels and roles
+- Implement proper heading hierarchy (h1, h2, h3, etc.)
+
+### JavaScript Interaction Patterns
+
+- Provide keyboard accessibility for all interactive elements
+- Implement proper focus management
+- Use proper event handling patterns
+
+## Quality Checklist
+
+Before considering any UI complete, verify:
+
+- [ ] Mobile responsive (test on 320px width)
+- [ ] Keyboard accessible (Tab navigation works)
+- [ ] Screen reader compatible (semantic HTML, ARIA labels)
+- [ ] Color contrast meets WCAG standards
+- [ ] Touch targets are at least 44x44px
+- [ ] Loading states implemented
+- [ ] Error handling with user-friendly messages
+- [ ] Images optimized and responsive
+
+## Common Anti-Patterns to Avoid
+
+- ❌ Using fixed pixel values instead of relative units
+- ❌ Missing alt text for images
+- ❌ Non-semantic HTML (divs for everything)
+- ❌ Inaccessible forms without proper labels
+- ❌ Hard-coded colors instead of CSS variables
+- ❌ Missing focus states for interactive elements
+- ❌ Poor error handling and user feedback
+
+## Application Rules
+
+- **ALWAYS** apply these standards when creating any user interface
+- **MUST** follow accessibility guidelines for all public-facing features
+- **REQUIRED** to implement responsive design for all layouts
+- **ENSURE** performance optimization for all user-facing code
+
+**Remember: These are not suggestions but requirements for creating professional, accessible, and user-friendly interfaces.**
