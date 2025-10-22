@@ -1,18 +1,35 @@
 services:
   backend:
-    container_name: backend
+    container_name: youtube-notes-backend
     build:
       context: ./apps/backend
       dockerfile: dockerfile
     ports:
       - "8000:8000"
+    volumes:
+      - ./apps/backend:/app
     environment:
       - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     networks:
       - youtube-notes-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
   frontend:
-    container_name: frontend
+    container_name: youtube-notes-frontend
     build:
       context: ./apps/frontend
       dockerfile: dockerfile
@@ -22,14 +39,32 @@ services:
       - ./apps/frontend:/app
       - /app/node_modules
     environment:
-      - VITE_PUBLIC_BACKEND_URL=http://backend:8000
+      - NODE_ENV=development
+      - VITE_PUBLIC_BACKEND_URL=http://localhost:8000
       - VITE_PUBLIC_TANSTACK_STALE_TIME=300000
       - VITE_PUBLIC_TANSTACK_GARBAGE_COLLECTION_TIME=300000
       - VITE_PUBLIC_API_TIMEOUT=10000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - youtube-notes-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   youtube-notes-network:
+    driver: bridge
