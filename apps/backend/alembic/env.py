@@ -17,7 +17,7 @@ if config.config_file_name is not None:
 from sqlmodel import SQLModel
 
 # Import all your models here
-# from models import User, Note, NoteTranslation
+from modules.user.model import User
 
 target_metadata = SQLModel.metadata
 

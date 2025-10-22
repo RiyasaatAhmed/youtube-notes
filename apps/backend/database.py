@@ -7,6 +7,10 @@ engine = create_engine(DATABASE_URL, echo=False)
 
 def init_db():
     """Initialize database tables"""
+    # Import all models here to ensure they are registered
+    from modules.user.model import User  # noqa: F401
+    
+    # Create all tables
     SQLModel.metadata.create_all(engine)
     print("✓ Database initialized successfully")
 
