@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { secrets } from "@/statics/secrets";
+import { secrets } from "@/constants/secrets";
 
 /**
  * Configured React Query client with default options.

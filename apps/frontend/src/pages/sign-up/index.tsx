@@ -11,7 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
 
 /**
  * Sign up page component.
@@ -19,6 +20,9 @@ import { Link } from "react-router-dom";
  * @returns sign up page
  */
 export function SignUpPage() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -42,14 +46,13 @@ export function SignUpPage() {
     setIsLoading(true);
 
     try {
-      // Handle sign up logic here
-      console.log("Sign up attempt:", formData);
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Redirect to dashboard or home page
-      // navigate("/dashboard");
+      await register({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        password: formData.password,
+      });
+      navigate("/");
     } catch (error) {
       console.error("Sign up failed:", error);
     } finally {

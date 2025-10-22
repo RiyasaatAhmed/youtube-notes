@@ -9,11 +9,16 @@ import "./styles/index.css";
 import { queryClient } from "@/lib/query-client";
 import { router } from "./routes";
 
+// Providers
+import { AuthProvider } from "./providers/auth-provider";
+
 function App() {
   return (
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
       </QueryClientProvider>
     </StrictMode>
   );

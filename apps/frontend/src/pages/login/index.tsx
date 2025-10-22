@@ -11,7 +11,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
+import { AxiosError } from "axios";
 
 /**
  * Login page component.
@@ -19,12 +21,15 @@ import { Link } from "react-router-dom";
  * @returns login page
  */
 export function LoginPage() {
+  const navigate = useNavigate();
+  const { login, loginLoading } = useAuth();
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,25 +37,26 @@ export function LoginPage() {
       ...prev,
       [name]: value,
     }));
+    // Clear error when user starts typing
+    if (error) setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setError(null);
 
     try {
-      // Handle login logic here
-      console.log("Login attempt:", formData);
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Redirect to dashboard or home page
-      // navigate("/dashboard");
-    } catch (error) {
-      console.error("Login failed:", error);
-    } finally {
-      setIsLoading(false);
+      await login({
+        email: formData.email,
+        password: formData.password,
+      });
+      // Navigate to home page after successful login
+      navigate("/");
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError<{ detail: string }>;
+      setError(
+        axiosError.response?.data?.detail ?? "Invalid email or password"
+      );
     }
   };
 
@@ -66,6 +72,11 @@ export function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col gap-6">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -76,6 +87,7 @@ export function LoginPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
+                  disabled={loginLoading}
                 />
               </div>
               <div className="grid gap-2">
@@ -95,6 +107,7 @@ export function LoginPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
+                  disabled={loginLoading}
                 />
               </div>
             </div>
@@ -104,10 +117,10 @@ export function LoginPage() {
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading}
+            disabled={loginLoading}
             onClick={handleSubmit}
           >
-            {isLoading ? (
+            {loginLoading ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Signing in...
