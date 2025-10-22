@@ -1,0 +1,14 @@
+FROM postgres:16-alpine
+
+# Set environment variables
+ENV POSTGRES_USER=postgres \
+    POSTGRES_PASSWORD=postgres \
+    POSTGRES_DB=youtube_notes
+
+# Expose PostgreSQL port
+EXPOSE 5432
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=10s \
+    CMD pg_isready -U postgres || exit 1
+

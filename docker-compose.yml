@@ -12,6 +12,10 @@ services:
       - PYTHONPATH=/app
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://postgres:postgres@youtube-notes-db:5432/youtube_notes
+    depends_on:
+      youtube-notes-db:
+        condition: service_healthy
     networks:
       - youtube-notes-network
     restart: unless-stopped
@@ -65,6 +69,31 @@ services:
       retries: 3
       start_period: 10s
 
+  youtube-notes-db:
+    container_name: youtube-notes-db
+    build: ./apps/database
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=youtube_notes
+    ports:
+      - "5432:5432"
+    volumes:
+      - youtube-notes-db-data:/var/lib/postgresql/data
+    networks:
+      - youtube-notes-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   youtube-notes-network:
     driver: bridge
+
+volumes:
+  youtube-notes-db-data:
+    driver: local
