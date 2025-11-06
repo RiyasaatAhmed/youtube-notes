@@ -13,6 +13,8 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://postgres:postgres@youtube-notes-db:5432/youtube_notes
+      - GEMINI_API_KEY=AIzaSyAcA5IM2OM9020yyXjfxCdORZ4ezD7GRmk
+      - GEMINI_MODEL=gemini-2.5-flash-lite
     depends_on:
       youtube-notes-db:
         condition: service_healthy

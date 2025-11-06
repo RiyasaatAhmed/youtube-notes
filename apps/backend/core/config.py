@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     COOKIE_SAMESITE: str = "lax"
     COOKIE_MAX_AGE: int = 60 * 60 * 24  # 24 hours
     
+    # Google Gemini AI
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL")
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
