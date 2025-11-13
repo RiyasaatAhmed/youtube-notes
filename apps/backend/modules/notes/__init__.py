@@ -15,7 +15,8 @@ from .model import (
 from .utils import (
     extract_video_id,
     validate_youtube_url,
-    get_video_metadata
+    get_video_metadata,
+    extract_audio_to_text
 )
 from .service import NoteService
 from .route import router as notes_router
@@ -38,4 +39,5 @@ __all__ = [
     "extract_video_id",
     "validate_youtube_url",
     "get_video_metadata",
+    "extract_audio_to_text",
 ]

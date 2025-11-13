@@ -37,7 +37,7 @@ export function Header() {
               <span className="text-sm text-muted-foreground">
                 {user.first_name} {user.last_name}
               </span>
-              <Link to="/">
+              <Link to="/notes">
                 <Button variant="ghost" size="sm">
                   My Notes
                 </Button>

@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useCreateNoteMutation } from "@/api/notes";
 
 /**
  * Home page component.
@@ -10,26 +12,38 @@ import { useState } from "react";
  * @returns home page
  */
 export function HomePage() {
+  const navigate = useNavigate();
   const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createNoteMutation = useCreateNoteMutation({
+    onSuccess: (note) => {
+      // Navigate to the created note detail page
+      navigate(`/notes/${note.id}`);
+    },
+    onError: (error) => {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to create note. Please try again."
+      );
+    },
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setError(null);
+
+    if (!isValidYouTubeUrl(youtubeUrl)) {
+      setError("Please enter a valid YouTube URL");
+      return;
+    }
 
     try {
-      // Handle YouTube URL processing logic here
-      console.log("Processing YouTube URL:", youtubeUrl);
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Redirect to notes page or show results
-      // navigate("/notes");
+      await createNoteMutation.mutateAsync({ youtube_url: youtubeUrl });
     } catch (error) {
-      console.error("Failed to process YouTube URL:", error);
-    } finally {
-      setIsLoading(false);
+      // Error is handled in onError callback
+      console.error("Failed to create note:", error);
     }
   };
 
@@ -60,14 +74,32 @@ export function HomePage() {
               <Button
                 type="submit"
                 className="text-md font-semibold h-8 w-8 p-0 rounded-full absolute right-2 top-1"
-                disabled={isLoading || !isValidYouTubeUrl(youtubeUrl)}
+                disabled={
+                  createNoteMutation.isPending || !isValidYouTubeUrl(youtubeUrl)
+                }
+                aria-label="Create note from YouTube URL"
               >
-                <ArrowUp className="w-4 h-4 stroke-4" />
+                {createNoteMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="w-4 h-4 stroke-4" />
+                )}
               </Button>
             </div>
-            {youtubeUrl && !isValidYouTubeUrl(youtubeUrl) && (
-              <p className="text-sm text-red-600">
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4" />
+                <p>{error}</p>
+              </div>
+            )}
+            {youtubeUrl && !isValidYouTubeUrl(youtubeUrl) && !error && (
+              <p className="text-sm text-destructive">
                 Please enter a valid YouTube URL
+              </p>
+            )}
+            {createNoteMutation.isPending && (
+              <p className="text-sm text-muted-foreground">
+                Creating note from video... This may take a few moments.
               </p>
             )}
           </form>

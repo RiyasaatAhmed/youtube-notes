@@ -25,6 +25,13 @@ export const API_ENDPOINTS = {
     DEACTIVATE: (id: number) => `/api/users/${id}/deactivate`,
     VERIFY: (id: number) => `/api/users/${id}/verify`,
   },
+  NOTES: {
+    GET_ALL: "/api/notes/",
+    BY_ID: (id: number) => `/api/notes/${id}`,
+    CREATE: "/api/notes/",
+    UPDATE: (id: number) => `/api/notes/${id}`,
+    DELETE: (id: number) => `/api/notes/${id}`,
+  },
 } as const;
 
 export { BASE_URL };

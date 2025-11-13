@@ -17,7 +17,8 @@ from modules.notes.model import Note, NoteCreate, NoteUpdate, NoteResponse
 from modules.notes.utils import (
     extract_video_id,
     get_video_metadata,
-    validate_youtube_url
+    validate_youtube_url,
+    extract_audio_to_text
 )
 from core.config import settings
 
@@ -340,16 +341,28 @@ Return ONLY the JSON object, nothing else."""
             # Fetch video metadata and subtitle
             self._logger.info(f"Fetching metadata for video: {note_data.youtube_url}")
             metadata = get_video_metadata(video_id)
-            
             video_title = metadata['title']
             channel_name = metadata['channel']
             subtitle_text = metadata.get('subtitle_text', '')
             
+            # If no subtitles available, try to extract text from audio
             if not subtitle_text:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="This video does not have captions available. Please choose a video with captions."
-                )
+                self._logger.info("No subtitles available, attempting to extract text from audio")
+                try:
+                    subtitle_text = extract_audio_to_text(note_data.youtube_url, video_id)
+                    self._logger.info("Successfully extracted text from audio")
+                except HTTPException as e:
+                    # If audio extraction fails, raise the error
+                    raise HTTPException(
+                        status_code=e.status_code,
+                        detail=f"This video does not have captions available and audio extraction failed: {e.detail}"
+                    )
+                except Exception as e:
+                    self._logger.error(f"Audio extraction failed: {str(e)}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"This video does not have captions available and audio extraction failed: {str(e)}"
+                    )
             
             # Generate note content with Gemini
             self._logger.info("Generating note content with Gemini AI")

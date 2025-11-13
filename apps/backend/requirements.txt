@@ -18,5 +18,9 @@ python-multipart==0.0.9
 youtube-transcript-api==0.6.2
 yt-dlp==2025.1.12
 
+# Audio Processing & Speech Recognition
+SpeechRecognition==3.10.4
+pydub==0.25.1
+
 # Note Generation
 google-genai==1.49.0

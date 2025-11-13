@@ -7,6 +7,8 @@ import { LoginPage } from "@/pages/login";
 import { SignUpPage } from "@/pages/sign-up";
 import { ForgetPasswordPage } from "@/pages/forget-password";
 import { HomePage } from "@/pages/home";
+import { NotesListPage } from "@/pages/notes";
+import { NoteDetailPage } from "@/pages/notes/detail";
 
 /** Route definitions */
 const routes: Array<RouteObject> = [
@@ -17,6 +19,14 @@ const routes: Array<RouteObject> = [
       {
         index: true,
         element: <HomePage />,
+      },
+      {
+        path: "notes",
+        element: <NotesListPage />,
+      },
+      {
+        path: "notes/:id",
+        element: <NoteDetailPage />,
       },
     ],
   },
