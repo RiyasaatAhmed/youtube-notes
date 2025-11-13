@@ -9,6 +9,7 @@ def init_db():
     """Initialize database tables"""
     # Import all models here to ensure they are registered
     from modules.user.model import User  # noqa: F401
+    from modules.notes.model import Note  # noqa: F401
     
     # Create all tables
     SQLModel.metadata.create_all(engine)

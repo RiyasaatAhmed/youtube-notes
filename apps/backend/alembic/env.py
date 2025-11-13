@@ -18,6 +18,7 @@ from sqlmodel import SQLModel
 
 # Import all your models here
 from modules.user.model import User
+from modules.notes.model import Note
 
 target_metadata = SQLModel.metadata
 

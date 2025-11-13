@@ -1,164 +1,218 @@
-from fastapi import APIRouter, status, HTTPException
-from google import genai
-import json
-import re
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
-import yt_dlp
-from modules.notes.get_video_metadata import get_video_metadata
+"""
+Notes Routes
 
-from core.config import settings
+API endpoints for notes management
+"""
+
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
+from typing import Optional, List
+
+from database import get_session
+from modules.notes.model import (
+    Note,
+    NoteCreate,
+    NoteUpdate,
+    NoteResponse
+)
+from modules.notes.service import NoteService
+from modules.user.model import User
+from core.security import get_current_active_user
+from pydantic import BaseModel
+
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 
-def extract_video_id(youtube_url: str) -> str:
-    """Extract video ID from YouTube URL"""
-    patterns = [
-        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})',
-        r'm\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, youtube_url)
-        if match:
-            return match.group(1)
-    
-    raise ValueError(f"Invalid YouTube URL: {youtube_url}")
+# ============================================================================
+# RESPONSE MODELS
+# ============================================================================
 
+class NotePagination(BaseModel):
+    """Note pagination response"""
+    notes: List[NoteResponse]
+    total_notes: int
+    total_pages: int
+    current_page: int
+    page_size: int
+
+
+class MessageResponse(BaseModel):
+    """Simple message response"""
+    message: str
+
+
+# ============================================================================
+# DEPENDENCY INJECTION
+# ============================================================================
+
+def get_note_service(
+    session: Session = Depends(get_session)
+) -> NoteService:
+    """Dependency injection for NoteService"""
+    return NoteService(session=session)
+
+
+# ============================================================================
+# NOTES CRUD ENDPOINTS - Create
+# ============================================================================
 
 @router.post(
-    "/create-note",
+    "/",
+    response_model=NoteResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new note",
-    description="Create a new note for a YouTube video"
+    summary="Create a new note from YouTube video",
+    description="Create a note by providing a YouTube video URL. The system will fetch the transcript and generate notes using AI."
 )
 def create_note(
-    video_url: str,
+    note_data: NoteCreate,
+    current_user: User = Depends(get_current_active_user),
+    note_service: NoteService = Depends(get_note_service)
 ):
     """
-    Create a new note for a YouTube video
+    Create a new note from YouTube video URL
     
-    This endpoint takes a YouTube video URL and uses Gemini AI to generate
-    comprehensive notes including:
-    - Video title and channel name
-    - Key points and main topics
-    - Timestamps for important sections
-    - Summary of the content
+    Requires authentication
+    
+    - **youtube_url**: Valid YouTube video URL
+    
+    The system will:
+    1. Validate the YouTube URL
+    2. Check for duplicate notes (same video for same user)
+    3. Fetch video transcript
+    4. Generate note content using AI (video title, channel name, summary, key points, timestamps)
+    5. Save the note to your account
+    
+    Returns the created note with all generated content.
     """
-    # Get API key from settings
-    api_key = settings.GEMINI_API_KEY
-    model = getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash-lite')
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GEMINI_API_KEY is not configured"
-        )
+    note = note_service.create_note(
+        user_id=current_user.id,
+        note_data=note_data
+    )
+    return note
+
+
+# ============================================================================
+# NOTES CRUD ENDPOINTS - Read
+# ============================================================================
+
+@router.get(
+    "/",
+    response_model=NotePagination,
+    summary="Get all notes",
+    description="Get paginated list of notes for the current user with optional search"
+)
+def get_notes(
+    current_page: int = 1,
+    page_size: int = 10,
+    search: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    note_service: NoteService = Depends(get_note_service)
+):
+    """
+    Get paginated list of notes
     
-    # Extract video ID
-    try:
-        video_id = extract_video_id(video_url)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    Requires authentication
+    Only returns notes that belong to the current user
     
-    # Fetch video metadata (title, channel)
-    metadata = get_video_metadata(video_id)
-    video_title = metadata['title']
-    channel_name = metadata['channel']
-    subtitle_text = metadata['subtitle_text']
+    - **current_page**: Page number (default: 1)
+    - **page_size**: Items per page (default: 10, max: 100)
+    - **search**: Search term for title, channel, or summary
+    """
+    result = note_service.get_notes(
+        user_id=current_user.id,
+        current_page=current_page,
+        page_size=page_size,
+        search=search
+    )
     
-    # Initialize Gemini client
-    client = genai.Client(api_key=api_key)
+    return NotePagination(**result)
+
+
+@router.get(
+    "/{note_id}",
+    response_model=NoteResponse,
+    summary="Get note by ID",
+    description="Get specific note information by ID"
+)
+def get_note_by_id(
+    note_id: int,
+    current_user: User = Depends(get_current_active_user),
+    note_service: NoteService = Depends(get_note_service)
+):
+    """
+    Get note by ID
     
-    # Create comprehensive prompt for Gemini with actual subtitle text
-    prompt = f"""You are an expert at analyzing YouTube video subtitle text and creating comprehensive, well-structured notes.
-
-I have provided you with the actual video subtitle text below. Please analyze it and create detailed notes in JSON format.
-
-VIDEO INFORMATION:
-- Video Title: {video_title}
-- Channel Name: {channel_name}
-- Video URL: {video_url}
-
-VIDEO SUBTITLE TEXT:
-{subtitle_text}
-
-Please provide your response as a valid JSON object with the following structure:
-{{
-    "video_title": "{video_title}",
-    "channel_name": "{channel_name}",
-    "summary": "A comprehensive summary of the video content in 2-3 paragraphs. This should cover the main topics, key concepts, and overall message of the video.",
-    "key_points": [
-        "Key point 1 - A clear and concise main point from the video",
-        "Key point 2 - Another important point",
-        "Key point 3 - Continue with 5-10 key points that capture the main topics and important information"
-    ],
-    "timestamps": [
-        {{
-            "time": "00:30",
-            "description": "Brief description of what happens at this timestamp - important moments, topic changes, or key information"
-        }},
-        {{
-            "time": "02:15",
-            "description": "Another important timestamp with description"
-        }}
-    ]
-}}
-
-IMPORTANT INSTRUCTIONS:
-1. Use the EXACT video title and channel name provided above - do NOT change them
-2. Create a comprehensive summary (2-3 paragraphs) that captures the essence of the video based on the transcript
-3. Identify 5-10 key points that represent the main topics and important information
-4. Identify 3-7 important timestamps with brief descriptions of what happens at each moment
-5. Timestamps should be in MM:SS format (e.g., "05:30", "12:45")
-6. Only include timestamps for truly important moments (topic changes, key concepts, important information)
-7. Ensure the response is valid JSON only - no markdown formatting, no code blocks, just pure JSON
-8. If you cannot access the video content, return an error message in the JSON format
-
-Return ONLY the JSON object, nothing else."""
+    Requires authentication
+    Only returns note if it belongs to the current user
     
-    try:
-        # Generate content with Gemini
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt
-        )
-        
-        # Extract the response text
-        response_text = response.text.strip()
-        
-        # Remove markdown code blocks if present
-        if response_text.startswith('```json'):
-            response_text = response_text[7:]
-        elif response_text.startswith('```'):
-            response_text = response_text[3:]
-        if response_text.endswith('```'):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-        
-        # Parse JSON response
-        try:
-            note_data = json.loads(response_text)
-        except json.JSONDecodeError as e:
-            # If JSON parsing fails, return the raw response for debugging
-            return {
-                "error": "Failed to parse Gemini response as JSON",
-                "raw_response": response_text[:500],  # First 500 chars for debugging
-                "parse_error": str(e)
-            }
-        
-        # Return the note data
-        return {
-            "message": "Note created successfully",
-            "video_url": video_url,
-            "note": note_data
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate note: {str(e)}"
-        )
+    - **note_id**: Note ID to retrieve
+    """
+    note = note_service.get_note_by_id(note_id, current_user.id)
+    return note
+
+
+# ============================================================================
+# NOTES CRUD ENDPOINTS - Update
+# ============================================================================
+
+@router.put(
+    "/{note_id}",
+    response_model=NoteResponse,
+    summary="Update note",
+    description="Update note information"
+)
+def update_note(
+    note_id: int,
+    note_data: NoteUpdate,
+    current_user: User = Depends(get_current_active_user),
+    note_service: NoteService = Depends(get_note_service)
+):
+    """
+    Update note information
+    
+    Requires authentication
+    Users can only update their own notes
+    
+    - **note_id**: Note ID to update
+    - **note_data**: Fields to update (all optional):
+      - video_title
+      - channel_name
+      - summary
+      - key_points
+      - timestamps
+    """
+    note = note_service.update_note(
+        note_id=note_id,
+        user_id=current_user.id,
+        note_data=note_data
+    )
+    return note
+
+
+# ============================================================================
+# NOTES CRUD ENDPOINTS - Delete
+# ============================================================================
+
+@router.delete(
+    "/{note_id}",
+    response_model=MessageResponse,
+    summary="Delete note",
+    description="Delete a note permanently"
+)
+def delete_note(
+    note_id: int,
+    current_user: User = Depends(get_current_active_user),
+    note_service: NoteService = Depends(get_note_service)
+):
+    """
+    Delete note
+    
+    Requires authentication
+    Users can only delete their own notes
+    WARNING: This action cannot be undone
+    
+    - **note_id**: Note ID to delete
+    """
+    result = note_service.delete_note(note_id, current_user.id)
+    return MessageResponse(**result)
