@@ -17,6 +17,7 @@ python-multipart==0.0.9
 # YouTube Transcript & Metadata
 youtube-transcript-api==0.6.2
 yt-dlp==2025.1.12
+pytubefix
 
 # Audio Processing & Speech Recognition
 SpeechRecognition==3.10.4

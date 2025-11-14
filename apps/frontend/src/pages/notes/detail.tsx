@@ -15,15 +15,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft,
   Calendar,
   User,
   Loader2,
   AlertCircle,
   Trash2,
-  ExternalLink,
   Clock,
   List,
+  Eye,
+  ThumbsUp,
+  Play,
+  MoreHorizontal,
+  Pencil,
 } from "lucide-react";
 import type { Timestamp } from "@/types/notes.types";
 
@@ -69,8 +79,63 @@ export function NoteDetailPage() {
     });
   };
 
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "N/A";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatNumber = (num: number | null) => {
+    if (!num) return "N/A";
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toString();
+  };
+
   const openYouTubeVideo = (url: string) => {
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openYouTubeVideoAtTimestamp = (url: string, timestamp: string) => {
+    // Extract video ID from YouTube URL
+    const videoIdMatch = url.match(
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    );
+    if (!videoIdMatch) {
+      // Fallback to original URL if we can't extract video ID
+      openYouTubeVideo(url);
+      return;
+    }
+
+    const videoId = videoIdMatch[1];
+
+    // Convert timestamp (MM:SS or HH:MM:SS) to seconds
+    const timeParts = timestamp.split(":").map(Number);
+    let totalSeconds = 0;
+
+    if (timeParts.length === 2) {
+      // MM:SS format
+      totalSeconds = timeParts[0] * 60 + timeParts[1];
+    } else if (timeParts.length === 3) {
+      // HH:MM:SS format
+      totalSeconds = timeParts[0] * 3600 + timeParts[1] * 60 + timeParts[2];
+    }
+
+    // Create YouTube URL with timestamp
+    const timestampUrl = `https://www.youtube.com/watch?v=${videoId}&t=${totalSeconds}s`;
+    window.open(timestampUrl, "_blank", "noopener,noreferrer");
   };
 
   if (isLoading) {
@@ -111,68 +176,111 @@ export function NoteDetailPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* Back Button */}
-      <Button
-        variant="ghost"
-        onClick={() => navigate("/notes")}
-        className="mb-6"
-        aria-label="Back to notes list"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Notes
-      </Button>
-
+    <div className="container mx-auto px-4 max-w-4xl">
       {/* Main Content */}
       <div className="space-y-6">
-        {/* Header Card */}
+        {/* Header Card with Thumbnail */}
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <CardTitle className="text-2xl mb-2">
-                  {note.video_title || "Untitled Video"}
-                </CardTitle>
-                {note.channel_name && (
-                  <CardDescription className="flex items-center gap-2 text-base">
-                    <User className="w-4 h-4" />
-                    {note.channel_name}
-                  </CardDescription>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openYouTubeVideo(note.youtube_url)}
-                  aria-label="Open video on YouTube"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Watch Video
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  aria-label="Delete note"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {deleteMutation.isPending ? "Deleting..." : "Delete"}
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                Created: {formatDate(note.created_at)}
-              </div>
-              {note.updated_at !== note.created_at && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  Updated: {formatDate(note.updated_at)}
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Thumbnail */}
+              {note.thumbnail_url && (
+                <div className="shrink-0">
+                  <img
+                    src={note.thumbnail_url}
+                    alt={note.video_title || "Video thumbnail"}
+                    className="w-full md:w-64 h-auto rounded-lg object-cover"
+                    loading="lazy"
+                  />
                 </div>
               )}
+
+              {/* Content */}
+              <div className="flex-1 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <CardTitle className="text-2xl mb-2">
+                      <span
+                        role="link"
+                        className="cursor-pointer hover:underline"
+                        onClick={() => openYouTubeVideo(note.youtube_url)}
+                      >
+                        {note.video_title || "Untitled Video"}
+                      </span>
+                    </CardTitle>
+                    {note.channel_name && (
+                      <CardDescription className="flex items-center gap-2 text-base">
+                        <User className="w-4 h-4" />
+                        {note.channel_name}
+                      </CardDescription>
+                    )}
+                  </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        aria-label="More options"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Open menu</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // TODO: Implement edit functionality
+                          console.log("Edit note");
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        <span>Edit</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={handleDelete}
+                        disabled={deleteMutation.isPending}
+                        className="cursor-pointer text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        <span>
+                          {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Video Stats */}
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  {note.duration_in_seconds && (
+                    <div className="flex items-center gap-1">
+                      <Play className="w-4 h-4" />
+                      <span>{formatDuration(note.duration_in_seconds)}</span>
+                    </div>
+                  )}
+                  {note.views !== null && (
+                    <div className="flex items-center gap-1">
+                      <Eye className="w-4 h-4" />
+                      <span>{formatNumber(note.views)} views</span>
+                    </div>
+                  )}
+                  {note.likes !== null && (
+                    <div className="flex items-center gap-1">
+                      <ThumbsUp className="w-4 h-4" />
+                      <span>{formatNumber(note.likes)} likes</span>
+                    </div>
+                  )}
+                  {note.publish_date && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>Published: {formatDate(note.publish_date)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </CardHeader>
         </Card>
@@ -235,9 +343,18 @@ export function NoteDetailPage() {
                     className="flex gap-4 p-4 rounded-lg border bg-card"
                   >
                     <div className="shrink-0">
-                      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary font-mono font-semibold">
+                      <button
+                        onClick={() =>
+                          openYouTubeVideoAtTimestamp(
+                            note.youtube_url,
+                            timestamp.time
+                          )
+                        }
+                        className="text-blue-500 hover:text-blue-600 hover:underline font-mono font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded px-2 py-1"
+                        aria-label={`Jump to ${timestamp.time} in video`}
+                      >
                         {timestamp.time}
-                      </div>
+                      </button>
                     </div>
                     <div className="flex-1 pt-1">
                       <p className="text-base leading-relaxed">
@@ -267,4 +384,3 @@ export function NoteDetailPage() {
     </div>
   );
 }
-

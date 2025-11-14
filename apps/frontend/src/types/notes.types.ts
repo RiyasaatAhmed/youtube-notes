@@ -13,6 +13,11 @@ export interface Note {
   summary: string | null;
   key_points: string[] | null;
   timestamps: Timestamp[] | null;
+  duration_in_seconds: number | null;
+  thumbnail_url: string | null;
+  views: number | null;
+  likes: number | null;
+  publish_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +37,11 @@ export interface NoteUpdate {
   summary?: string;
   key_points?: string[];
   timestamps?: Timestamp[];
+  duration_in_seconds?: number;
+  thumbnail_url?: string;
+  views?: number;
+  likes?: number;
+  publish_date?: string;
 }
 
 export interface NotePagination {
@@ -45,4 +55,3 @@ export interface NotePagination {
 export interface MessageResponse {
   message: string;
 }
-

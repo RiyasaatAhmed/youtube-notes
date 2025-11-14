@@ -26,6 +26,8 @@ import {
   Loader2,
   FileText,
   AlertCircle,
+  Play,
+  ThumbsUp,
 } from "lucide-react";
 import type { Note } from "@/types/notes.types";
 
@@ -94,6 +96,31 @@ export function NotesListPage() {
     if (!text) return "No summary available";
     if (text.length <= maxLength) return text;
     return `${text.substring(0, maxLength)}...`;
+  };
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return null;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatNumber = (num: number | null) => {
+    if (!num) return null;
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toString();
   };
 
   return (
@@ -168,7 +195,7 @@ export function NotesListPage() {
             {data.notes.map((note: Note) => (
               <Card
                 key={note.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow focus-within:ring-2 focus-within:ring-ring"
+                className="cursor-pointer hover:shadow-lg transition-shadow focus-within:ring-2 focus-within:ring-ring overflow-hidden"
                 onClick={() => handleNoteClick(note.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -180,6 +207,24 @@ export function NotesListPage() {
                 role="button"
                 aria-label={`View note: ${note.video_title || "Untitled"}`}
               >
+                {/* Thumbnail */}
+                {note.thumbnail_url && (
+                  <div className="relative w-full h-48 overflow-hidden bg-muted">
+                    <img
+                      src={note.thumbnail_url}
+                      alt={note.video_title || "Video thumbnail"}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    {note.duration_in_seconds && (
+                      <div className="absolute bottom-2 right-2 bg-black/75 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                        <Play className="w-3 h-3" />
+                        {formatDuration(note.duration_in_seconds)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-lg line-clamp-2 flex-1">
@@ -190,7 +235,9 @@ export function NotesListPage() {
                       size="icon"
                       className="h-8 w-8 shrink-0"
                       onClick={(e) => handleDelete(note.id, e)}
-                      aria-label={`Delete note: ${note.video_title || "Untitled"}`}
+                      aria-label={`Delete note: ${
+                        note.video_title || "Untitled"
+                      }`}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
@@ -200,6 +247,23 @@ export function NotesListPage() {
                       <User className="w-3 h-3" />
                       {note.channel_name}
                     </CardDescription>
+                  )}
+                  {/* Video Stats */}
+                  {(note.views !== null || note.likes !== null) && (
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1">
+                      {note.views !== null && (
+                        <div className="flex items-center gap-1">
+                          <Eye className="w-3 h-3" />
+                          {formatNumber(note.views)}
+                        </div>
+                      )}
+                      {note.likes !== null && (
+                        <div className="flex items-center gap-1">
+                          <ThumbsUp className="w-3 h-3" />
+                          {formatNumber(note.likes)}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </CardHeader>
                 <CardContent>
@@ -247,7 +311,9 @@ export function NotesListPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
                   disabled={currentPage === 1 || isLoading}
                   aria-label="Previous page"
                 >
@@ -277,4 +343,3 @@ export function NotesListPage() {
     </div>
   );
 }
-

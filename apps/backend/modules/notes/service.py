@@ -5,6 +5,8 @@ Business logic for notes management including CRUD operations,
 YouTube video processing, and Gemini AI integration
 """
 
+import re
+import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any
 from datetime import datetime
 from sqlmodel import Session, select, func, or_
@@ -12,14 +14,12 @@ from fastapi import HTTPException, status
 import logging
 import json
 from google import genai
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
+import requests
+
 
 from modules.notes.model import Note, NoteCreate, NoteUpdate, NoteResponse
-from modules.notes.utils import (
-    extract_video_id,
-    get_video_metadata,
-    validate_youtube_url,
-    extract_audio_to_text
-)
 from core.config import settings
 
 
@@ -105,51 +105,93 @@ class NoteService:
             HTTPException: If Gemini API fails
         """
         try:
+            # Escape variables that might contain special characters
+            # Replace curly braces in subtitle_text to avoid format specifier errors
+            safe_subtitle_text = str(subtitle_text).replace('{', '{{').replace('}', '}}')
+            safe_video_title = str(video_title).replace('{', '{{').replace('}', '}}')
+            safe_channel_name = str(channel_name).replace('{', '{{').replace('}', '}}')
+            safe_video_url = str(video_url).replace('{', '{{').replace('}', '}}')
+            
             # Create comprehensive prompt for Gemini
-            prompt = f"""You are an expert at analyzing YouTube video subtitle text and creating comprehensive, well-structured notes.
+            # Use double braces {{ }} for literal braces in JSON examples
+            prompt = f"""You are an expert assistant that analyzes YouTube video subtitle text and produces precise, well-structured notes as a single valid JSON object. Detect the language of the provided subtitle_text and produce all textual output in that same language (preserve original wording where possible). If you cannot detect the language confidently, default to the language of the subtitle text provided.
 
-I have provided you with the actual video subtitle text below. Please analyze it and create detailed notes in JSON format.
+INPUT (replace the placeholders before calling the model):
+- video_title: {safe_video_title}
+- channel_name: {safe_channel_name}
+- video_url: {safe_video_url}
+- subtitle_text: {safe_subtitle_text}
 
-VIDEO INFORMATION:
-- Video Title: {video_title}
-- Channel Name: {channel_name}
-- Video URL: {video_url}
+INSTRUCTIONS:
+1. Use the EXACT video_title and channel_name provided above — do NOT change them.
+2. Detect the language of subtitle_text and produce every field text (summary, key_points, descriptions, quotes) in that detected language. Add a "language" field with an ISO 639-1 language code and the language name (e.g., "en - English").
+3. Return ONLY a single, valid JSON object (no markdown, no code fences, no extra commentary). Ensure the JSON is well-formed and escapes any characters necessary so it parses cleanly.
+4. Use the following JSON schema exactly (do not add extra top-level fields):
 
-VIDEO SUBTITLE TEXT:
-{subtitle_text}
-
-Please provide your response as a valid JSON object with the following structure:
 {{
-    "video_title": "{video_title}",
-    "channel_name": "{channel_name}",
-    "summary": "A comprehensive summary of the video content in 2-3 paragraphs. This should cover the main topics, key concepts, and overall message of the video.",
-    "key_points": [
-        "Key point 1 - A clear and concise main point from the video",
-        "Key point 2 - Another important point",
-        "Key point 3 - Continue with 5-10 key points that capture the main topics and important information"
-    ],
-    "timestamps": [
-        {{
-            "time": "00:30",
-            "description": "Brief description of what happens at this timestamp - important moments, topic changes, or key information"
-        }},
-        {{
-            "time": "02:15",
-            "description": "Another important timestamp with description"
-        }}
-    ]
+  "video_title": "{safe_video_title}",
+  "channel_name": "{safe_channel_name}",
+  "video_url": "{safe_video_url}",
+  "language": "xx - Language Name",
+  "summary": "A comprehensive summary of the video content in 2-3 paragraphs. Cover the main topics, key concepts, and the overall message, using the subtitle_text as the source.",
+  "short_summary": "A one-sentence summary (max 30 words) in the same language.",
+  "key_points": [
+    "5-10 concise key points (each 5-25 words) that capture the main ideas; return exactly as many items as are needed between 5 and 10."
+  ],
+  "important_quotes": [
+    {{
+      "quote": "A short important quotation (up to 2 lines) from the subtitles (preserve original wording).",
+      "time": "MM:SS or HH:MM:SS if video ≥ 1 hour"
+    }}
+  ],
+  "timestamps": [
+    {{
+      "time": "MM:SS or HH:MM:SS if video ≥ 1 hour",
+      "description": "Brief description (10-30 words) of what happens at this timestamp — major topic change, key example, or critical fact."
+    }}
+  ],
+  "notes_for_reviewers": "Optional short suggestions (1-3 bullet-style sentences) about what to check in the transcript or where automatic subtitle errors may affect understanding."
 }}
 
-IMPORTANT INSTRUCTIONS:
-1. Use the EXACT video title and channel name provided above - do NOT change them
-2. Create a comprehensive summary (2-3 paragraphs) that captures the essence of the video based on the subtitle text
-3. Identify 5-10 key points that represent the main topics and important information
-4. Identify 3-7 important timestamps with brief descriptions of what happens at each moment
-5. Timestamps should be in MM:SS format (e.g., "05:30", "12:45")
-6. Only include timestamps for truly important moments (topic changes, key concepts, important information)
-7. Ensure the response is valid JSON only - no markdown formatting, no code blocks, just pure JSON
+5. Timestamps requirements:
+   - Provide between 3 and 7 timestamp entries (only truly important moments).
+   - Format: use MM:SS for videos under 1 hour; use HH:MM:SS for videos 1 hour or longer (if video length unknown, default to MM:SS).
+   - Timestamps must be sorted ascending.
+   - If an exact timestamp cannot be determined from subtitle_text, provide the nearest approximate timestamp and append " (approx)" to the time value.
 
-Return ONLY the JSON object, nothing else."""
+6. Key points requirements:
+   - Provide 5–10 items.
+   - Each key point should be a single sentence or phrase (5–25 words).
+   - Order by importance (most important first).
+
+7. Summary requirements:
+   - Main "summary" must be 2–3 paragraphs, each paragraph 2–4 sentences.
+   - Also include a "short_summary" (one sentence).
+
+8. Important quotes:
+   - Provide up to 3 quotes (if present in subtitles), include the exact quote and the timestamp.
+   - Preserve original punctuation and casing.
+
+9. JSON safety and validation:
+   - Ensure no trailing commas.
+   - Escape internal quotes and control characters so the JSON parses.
+   - Do not include any explanatory text outside the JSON object.
+
+10. If subtitle_text is empty or contains insufficient content, return a valid JSON object with empty arrays and brief explanatory fields in the same language, e.g.:
+{{
+  "video_title": "...",
+  "channel_name": "...",
+  "video_url": "...",
+  "language": "en - English",
+  "summary": "",
+  "short_summary": "",
+  "key_points": [],
+  "important_quotes": [],
+  "timestamps": [],
+  "notes_for_reviewers": "Insufficient subtitle text to extract notes."
+}}
+
+Begin analysis of the provided subtitle_text and produce the JSON output now."""
             
             # Initialize Gemini client
             if not self._gemini_api_key:
@@ -309,65 +351,36 @@ Return ONLY the JSON object, nothing else."""
         Raises:
             HTTPException: If URL is invalid, duplicate, or processing fails
         """
-        # Validate YouTube URL
-        if not validate_youtube_url(note_data.youtube_url):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid YouTube URL"
-            )
-        
-        # Extract video ID
-        try:
-            video_id = extract_video_id(note_data.youtube_url)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
-        
-        # Check for duplicate note (same video URL for same user)
+        # Check if the video is already in the database
         statement = select(Note).where(
             Note.user_id == user_id,
             Note.youtube_url == note_data.youtube_url
         )
         existing_note = self._session.exec(statement).first()
         if existing_note:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You already have a note for this video. Please use the existing note or choose a different video."
-            )
-        
-        try:
-            # Fetch video metadata and subtitle
+            # Return existing note instead of raising error
+            self._logger.info(f"Note already exists for video {note_data.youtube_url}, returning existing note ID: {existing_note.id}")
+            return existing_note
+           
+        try:            
+            # Get video metadata
             self._logger.info(f"Fetching metadata for video: {note_data.youtube_url}")
-            metadata = get_video_metadata(video_id)
-            video_title = metadata['title']
-            channel_name = metadata['channel']
-            subtitle_text = metadata.get('subtitle_text', '')
+            video = self.get_video_metadata_from_youtube_video_url(note_data.youtube_url)
+            subtitle = video.get('caption', '')
+            video_title = video.get('title', '')
+            channel_name = video.get('channel_name', '')
             
-            # If no subtitles available, try to extract text from audio
-            if not subtitle_text:
-                self._logger.info("No subtitles available, attempting to extract text from audio")
-                try:
-                    subtitle_text = extract_audio_to_text(note_data.youtube_url, video_id)
-                    self._logger.info("Successfully extracted text from audio")
-                except HTTPException as e:
-                    # If audio extraction fails, raise the error
-                    raise HTTPException(
-                        status_code=e.status_code,
-                        detail=f"This video does not have captions available and audio extraction failed: {e.detail}"
-                    )
-                except Exception as e:
-                    self._logger.error(f"Audio extraction failed: {str(e)}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"This video does not have captions available and audio extraction failed: {str(e)}"
-                    )
+            # If no subtitle text was extracted, raise error
+            if not subtitle or not subtitle.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No captions/subtitles available for this video. Please choose a video with captions."
+                )
             
             # Generate note content with Gemini
             self._logger.info("Generating note content with Gemini AI")
             generated_data = self._generate_note_with_gemini(
-                subtitle_text,
+                subtitle,
                 note_data.youtube_url,
                 video_title,
                 channel_name
@@ -407,7 +420,12 @@ Return ONLY the JSON object, nothing else."""
                 channel_name=generated_data['channel_name'],
                 summary=generated_data['summary'],
                 key_points=json.dumps(generated_data['key_points']) if generated_data.get('key_points') else None,
-                timestamps=json.dumps(generated_data['timestamps']) if generated_data.get('timestamps') else None
+                timestamps=json.dumps(generated_data['timestamps']) if generated_data.get('timestamps') else None,
+                duration_in_seconds=video.get('duration_in_seconds'),
+                thumbnail_url=video.get('thumbnail_url'),
+                views=video.get('views'),
+                likes=video.get('likes'),
+                publish_date=video.get('publish_date')
             )
             
             # Save to database
@@ -580,4 +598,95 @@ Return ONLY the JSON object, nothing else."""
         
         self._logger.info(f"Deleted note with ID: {note_id}")
         return {"message": f"Note with ID {note_id} deleted successfully"}
+    
+    
+    # ============================================================================
+    # HELPER METHODS - Get Audio from Video
+    # ============================================================================
+    
+    def get_video_metadata_from_youtube_video_url(self, video_url: str) -> Dict[str, Any]:
+        try:
 
+            yt = YouTube(video_url, on_progress_callback = on_progress)
+            
+            first_lang_code = list(yt.captions.keys())[0].code
+            caption = yt.captions[first_lang_code]
+            
+            response = requests.get(
+                caption.url, 
+                timeout=10,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "https://www.youtube.com/"
+                }
+            )
+            response.raise_for_status()
+            subtitle_content = self._extract_text_from_xml_transcript(response.text)
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to download audio from YouTube video: {str(e)}"
+            )
+            
+        return {
+            "title": yt.title,
+            "caption": subtitle_content,
+            "channel_name": yt.author,
+            "duration_in_seconds": yt.length,
+            "thumbnail_url": yt.thumbnail_url,
+            "views": yt.views,
+            "likes": yt.likes,
+            "publish_date": yt.publish_date,
+            
+        }
+        
+        
+    def _extract_text_from_xml_transcript(self, xml_content: str) -> str:
+        """
+        Extract text content from XML transcript.
+        
+        Parses XML transcript and extracts all text from <text> tags,
+        combining them into a single string.
+        
+        Args:
+            xml_content: XML transcript content
+            
+        Returns:
+            Extracted text content as a single string
+        """
+        try:
+            # Parse XML
+            root = ET.fromstring(xml_content)
+            
+            # Extract all text from <text> tags
+            text_parts = []
+            for text_elem in root.findall('.//text'):
+                text_content = text_elem.text
+                if text_content:
+                    text_parts.append(text_content.strip())
+            
+            # Join all text parts with spaces
+            extracted_text = " ".join(text_parts)
+            
+            # Clean up extra whitespace
+            extracted_text = re.sub(r'\s+', ' ', extracted_text).strip()
+            
+            return extracted_text
+            
+        except ET.ParseError as e:
+            self._logger.warning(f"Failed to parse XML transcript, trying regex extraction: {str(e)}")
+            # Fallback: Use regex to extract text if XML parsing fails
+            text_pattern = r'<text[^>]*>([^<]+)</text>'
+            matches = re.findall(text_pattern, xml_content)
+            if matches:
+                extracted_text = " ".join(match.strip() for match in matches)
+                extracted_text = re.sub(r'\s+', ' ', extracted_text).strip()
+                return extracted_text
+            else:
+                # If regex also fails, return original content
+                self._logger.error("Failed to extract text from transcript using both XML parsing and regex")
+                return xml_content
+        except Exception as e:
+            self._logger.error(f"Unexpected error extracting text from XML: {str(e)}")
+            return xml_content

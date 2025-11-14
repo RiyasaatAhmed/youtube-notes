@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, Any
 from sqlmodel import SQLModel, Field, Column
 from sqlalchemy import Text
-from pydantic import field_validator, ConfigDict, field_serializer
+from pydantic import field_validator, ConfigDict
 import json
 
 
@@ -39,7 +39,27 @@ class NoteBase(SQLModel):
         default=None,
         description="Important timestamps from the video"
     )
-    
+    duration_in_seconds: Optional[int] = Field(
+        default=None,
+        description="Duration of the video in seconds"
+    )
+    thumbnail_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="URL of the video thumbnail"
+    )
+    views: Optional[int] = Field(
+        default=None,
+        description="Number of views on the video"
+    )
+    likes: Optional[int] = Field(
+        default=None,
+        description="Number of likes on the video"
+    )
+    publish_date: Optional[datetime] = Field(
+        default=None,
+        description="Date when the video was published"
+    )
 
     @field_validator('youtube_url')
     @classmethod
@@ -82,6 +102,27 @@ class Note(NoteBase, table=True):
         sa_column=Column(Text),
         description="Important timestamps from the video (stored as JSON)"
     )
+    duration_in_seconds: Optional[int] = Field(
+        default=None,
+        description="Duration of the video in seconds"
+    )
+    thumbnail_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="URL of the video thumbnail"
+    )
+    views: Optional[int] = Field(
+        default=None,
+        description="Number of views on the video"
+    )
+    likes: Optional[int] = Field(
+        default=None,
+        description="Number of likes on the video"
+    )
+    publish_date: Optional[datetime] = Field(
+        default=None,
+        description="Date when the video was published"
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp when note was created"
@@ -102,6 +143,11 @@ class Note(NoteBase, table=True):
                 "summary": "This is a summary of the video content...",
                 "key_points": ["Point 1", "Point 2", "Point 3"],
                 "timestamps": [{"time": "00:30", "description": "Introduction"}],
+                "duration_in_seconds": 3600,
+                "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                "views": 1000000,
+                "likes": 50000,
+                "publish_date": "2024-01-01T00:00:00",
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"
             }
@@ -160,6 +206,11 @@ class NoteUpdate(SQLModel):
     summary: Optional[str] = Field(default=None)
     key_points: Optional[list[str]] = Field(default=None)
     timestamps: Optional[list[dict]] = Field(default=None)
+    duration_in_seconds: Optional[int] = Field(default=None)
+    thumbnail_url: Optional[str] = Field(default=None, max_length=500)
+    views: Optional[int] = Field(default=None)
+    likes: Optional[int] = Field(default=None)
+    publish_date: Optional[datetime] = Field(default=None)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -223,6 +274,11 @@ class NoteResponse(NoteBase):
                 "summary": "This is a summary of the video content...",
                 "key_points": ["Point 1", "Point 2", "Point 3"],
                 "timestamps": [{"time": "00:30", "description": "Introduction"}],
+                "duration_in_seconds": 3600,
+                "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                "views": 1000000,
+                "likes": 50000,
+                "publish_date": "2024-01-01T00:00:00",
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"
             }

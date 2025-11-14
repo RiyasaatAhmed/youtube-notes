@@ -12,12 +12,6 @@ from .model import (
     NoteUpdate,
     NoteResponse
 )
-from .utils import (
-    extract_video_id,
-    validate_youtube_url,
-    get_video_metadata,
-    extract_audio_to_text
-)
 from .service import NoteService
 from .route import router as notes_router
 
