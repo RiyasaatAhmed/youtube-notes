@@ -124,15 +124,7 @@ export function NotesListPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      {/* Header */}
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">My Notes</h1>
-        <p className="text-muted-foreground">
-          View and manage your YouTube video notes
-        </p>
-      </header>
-
+    <div className="container mx-auto max-w-7xl">
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">

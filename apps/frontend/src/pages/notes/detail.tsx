@@ -176,7 +176,7 @@ export function NoteDetailPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 max-w-4xl">
+    <div className="container mx-auto max-w-4xl">
       {/* Main Content */}
       <div className="space-y-6">
         {/* Header Card with Thumbnail */}

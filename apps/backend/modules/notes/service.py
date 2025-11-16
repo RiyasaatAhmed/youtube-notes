@@ -6,6 +6,7 @@ YouTube video processing, and Gemini AI integration
 """
 
 import re
+import os
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -17,6 +18,8 @@ from google import genai
 from pytubefix import YouTube
 from pytubefix.cli import on_progress
 import requests
+from pydub import AudioSegment
+from deepgram import DeepgramClient
 
 
 from modules.notes.model import Note, NoteCreate, NoteUpdate, NoteResponse
@@ -39,10 +42,8 @@ class NoteService:
         self._session = session
         self._logger = logger
         
-        # Store Gemini API key for later use
-        self._gemini_api_key = settings.GEMINI_API_KEY
-        if not self._gemini_api_key:
-            self._logger.warning("GEMINI_API_KEY not found in settings")
+        self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self._deepgram_client = DeepgramClient(api_key=settings.DEEPGRAM_API_KEY)
     
     # ============================================================================
     # HELPER METHODS - Note Retrieval
@@ -193,19 +194,9 @@ INSTRUCTIONS:
 
 Begin analysis of the provided subtitle_text and produce the JSON output now."""
             
-            # Initialize Gemini client
-            if not self._gemini_api_key:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="GEMINI_API_KEY is not configured"
-                )
-            
-            client = genai.Client(api_key=self._gemini_api_key)
-            model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash-lite')
-            
             # Generate content
-            response = client.models.generate_content(
-                model=model_name,
+            response = self.gemini_client.models.generate_content(
+                model=settings.GEMINI_MODEL,
                 contents=prompt
             )
             
@@ -606,22 +597,23 @@ Begin analysis of the provided subtitle_text and produce the JSON output now."""
     
     def get_video_metadata_from_youtube_video_url(self, video_url: str) -> Dict[str, Any]:
         try:
-
             yt = YouTube(video_url, on_progress_callback = on_progress)
-            
-            first_lang_code = list(yt.captions.keys())[0].code
-            caption = yt.captions[first_lang_code]
-            
-            response = requests.get(
-                caption.url, 
-                timeout=10,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Referer": "https://www.youtube.com/"
-                }
-            )
-            response.raise_for_status()
-            subtitle_content = self._extract_text_from_xml_transcript(response.text)
+            if len(yt.captions.keys()) > 0:
+                first_lang_code = list(yt.captions.keys())[0].code
+                caption = yt.captions[first_lang_code]
+                
+                response = requests.get(
+                    caption.url, 
+                    timeout=10,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Referer": "https://www.youtube.com/"
+                    }
+                )
+                response.raise_for_status()
+                subtitle_content = self._extract_text_from_xml_transcript(response.text)
+            else:
+                subtitle_content = self._get_subtitle_from_audio(video_url)
             
         except Exception as e:
             raise HTTPException(
@@ -690,3 +682,65 @@ Begin analysis of the provided subtitle_text and produce the JSON output now."""
         except Exception as e:
             self._logger.error(f"Unexpected error extracting text from XML: {str(e)}")
             return xml_content
+    
+    
+    def _get_subtitle_from_audio(self, video_url: str) -> str:
+        """
+        Get subtitle from audio of a YouTube video
+        
+        Args:
+            video_url: YouTube video URL
+            
+        Returns:
+            Subtitle text
+        """
+        try:
+            yt = YouTube(video_url, on_progress_callback=on_progress)
+
+            # Get the backend directory path (parent of modules directory)
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            temp_audio_dir = os.path.join(backend_dir, 'temp_audio_files')
+            audio_file_name = video_url.split("=")[-1] + ".wav"
+            
+            audio_file_path = os.path.join(temp_audio_dir, audio_file_name)
+            
+            # Create directory if it doesn't exist
+            os.makedirs(temp_audio_dir, exist_ok=True)
+            
+            ys = yt.streams.get_audio_only()
+            ys.download(output_path=temp_audio_dir)
+
+            audio = AudioSegment.from_file(os.path.join(temp_audio_dir, ys.default_filename), format="m4a")
+            audio.export(audio_file_path, format="wav")
+            
+            # delete the original m4a file
+            os.remove(os.path.join(temp_audio_dir, ys.default_filename))
+            
+            # convert audio to text
+            try:
+                with open(audio_file_path, "rb") as audio_file:
+                    response = self._deepgram_client.listen.v1.media.transcribe_file(
+                        request=audio_file.read(),
+                        model=settings.DEEPGRAM_MODEL,
+                        smart_format=True,
+                    )
+                
+                transcript = response.results.channels[0].alternatives[0].transcript
+                os.remove(audio_file_path)
+                return transcript
+
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to convert audio to text: {str(e)}"
+                )
+  
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get subtitle from audio of YouTube video: {str(e)}"
+            )
+
+        
+        
+

@@ -46,9 +46,12 @@ class Settings(BaseSettings):
     COOKIE_MAX_AGE: int = 60 * 60 * 24  # 24 hours
     
     # Google Gemini AI
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
     
+    # Deepgram
+    DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY", "")
+    DEEPGRAM_MODEL: str = os.getenv("DEEPGRAM_MODEL", "nova-2")
     class Config:
         env_file = ".env"
         case_sensitive = True

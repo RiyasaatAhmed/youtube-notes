@@ -215,30 +215,3 @@ def delete_note(
     """
     result = note_service.delete_note(note_id, current_user.id)
     return MessageResponse(**result)
-
-
-@router.post(
-    "/download-video",
-    summary="Download video from YouTube",
-    description="Download complete video (video + audio) from a YouTube URL and store it in the root directory. Returns information about the downloaded file."
-)
-def download_video(
-    video_url: str,
-    note_service: NoteService = Depends(get_note_service)
-):
-    """
-    Download video from YouTube
-    
-    This endpoint downloads the complete video (video + audio) from a YouTube URL
-    and saves it to the root directory of the application.
-    
-    - **video_url**: Valid YouTube video URL
-    
-    Returns information about the downloaded video file including:
-    - File path (absolute path in root directory)
-    - File name
-    - File size in MB
-    - Video ID
-    """
-    result = note_service.get_video_metadata_from_youtube_video_url(video_url)
-    return result
