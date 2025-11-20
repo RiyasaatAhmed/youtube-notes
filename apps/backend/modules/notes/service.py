@@ -113,88 +113,152 @@ class NoteService:
             safe_channel_name = str(channel_name).replace('{', '{{').replace('}', '}}')
             safe_video_url = str(video_url).replace('{', '{{').replace('}', '}}')
             
-            # Create comprehensive prompt for Gemini
-            # Use double braces {{ }} for literal braces in JSON examples
-            prompt = f"""You are an expert assistant that analyzes YouTube video subtitle text and produces precise, well-structured notes as a single valid JSON object. Detect the language of the provided subtitle_text and produce all textual output in that same language (preserve original wording where possible). If you cannot detect the language confidently, default to the language of the subtitle text provided.
+            # CRISP-E formatted prompt (Context → Role → Instructions → Style → Parameters → Examples)
+            # NOTE: keep the f-string so variables are injected. Use double braces {{ }} for literal braces in JSON.
+            prompt = f"""
+                C — Context
+                You will receive raw subtitle text and video metadata (title, channel, URL). Analyze the subtitle text deeply and extract structured, accurate, human-readable notes that allow a reader to understand what the video is about, its main ideas, and where important content appears. Use the subtitle text as the primary source. If you cannot detect the language confidently, default to the language of the subtitle text provided.
 
-INPUT (replace the placeholders before calling the model):
-- video_title: {safe_video_title}
-- channel_name: {safe_channel_name}
-- video_url: {safe_video_url}
-- subtitle_text: {safe_subtitle_text}
+                INPUT (replace the placeholders before calling the model):
+                - video_title: {safe_video_title}
+                - channel_name: {safe_channel_name}
+                - video_url: {safe_video_url}
+                - subtitle_text: {safe_subtitle_text}
 
-INSTRUCTIONS:
-1. Use the EXACT video_title and channel_name provided above — do NOT change them.
-2. Detect the language of subtitle_text and produce every field text (summary, key_points, descriptions, quotes) in that detected language. Add a "language" field with an ISO 639-1 language code and the language name (e.g., "en - English").
-3. Return ONLY a single, valid JSON object (no markdown, no code fences, no extra commentary). Ensure the JSON is well-formed and escapes any characters necessary so it parses cleanly.
-4. Use the following JSON schema exactly (do not add extra top-level fields):
+                R — Role
+                Act as an expert note-taking assistant and world-class explainer who: distills long videos into clear notes, identifies key teaching points, extracts important quotes, and produces clean, valid JSON output with zero extra commentary.
 
-{{
-  "video_title": "{safe_video_title}",
-  "channel_name": "{safe_channel_name}",
-  "video_url": "{safe_video_url}",
-  "language": "xx - Language Name",
-  "summary": "A comprehensive summary of the video content in 2-3 paragraphs. Cover the main topics, key concepts, and the overall message, using the subtitle_text as the source.",
-  "short_summary": "A one-sentence summary (max 30 words) in the same language.",
-  "key_points": [
-    "5-10 concise key points (each 5-25 words) that capture the main ideas; return exactly as many items as are needed between 5 and 10."
-  ],
-  "important_quotes": [
-    {{
-      "quote": "A short important quotation (up to 2 lines) from the subtitles (preserve original wording).",
-      "time": "MM:SS or HH:MM:SS if video ≥ 1 hour"
-    }}
-  ],
-  "timestamps": [
-    {{
-      "time": "MM:SS or HH:MM:SS if video ≥ 1 hour",
-      "description": "Brief description (10-30 words) of what happens at this timestamp — major topic change, key example, or critical fact."
-    }}
-  ],
-  "notes_for_reviewers": "Optional short suggestions (1-3 bullet-style sentences) about what to check in the transcript or where automatic subtitle errors may affect understanding."
-}}
+                I — Instructions
+                1. Use the EXACT video_title and channel_name provided above — do NOT change them.
+                2. Detect the language of subtitle_text and produce every field text (summary, key_points, descriptions, quotes) in that detected language. Add a "language" field with an ISO 639-1 language code and the language name (e.g., "en - English").
+                3. Return ONLY a single, valid JSON object (no markdown, no code fences, no extra commentary). Ensure the JSON is well-formed and escapes any characters necessary so it parses cleanly.
+                4. Use the following JSON schema exactly (do not add extra top-level fields).
+                5. Timestamps requirements:
+                   - Provide between 3 and 7 timestamp entries (only truly important moments).
+                   - Format: use MM:SS for videos under 1 hour; use HH:MM:SS for videos 1 hour or longer (if video length unknown, default to MM:SS).
+                   - Timestamps must be sorted ascending.
+                   - If an exact timestamp cannot be determined from subtitle_text, provide the nearest approximate timestamp and append " (approx)" to the time value.
+                6. Key points requirements:
+                   - Provide 5–10 items.
+                   - Each key point should be a single sentence or phrase (5–25 words).
+                   - Order by importance (most important first).
+                7. Summary requirements:
+                   - Main "summary" must be 2–3 paragraphs, each paragraph 2–4 sentences.
+                   - Also include a "short_summary" (one sentence, max 30 words).
+                8. Important quotes:
+                   - Provide up to 3 quotes (if present in subtitles), include the exact quote and the timestamp.
+                   - Preserve original punctuation and casing.
+                9. JSON safety and validation:
+                   - Ensure no trailing commas.
+                   - Escape internal quotes and control characters so the JSON parses.
+                   - Do not include any explanatory text outside the JSON object.
+                10. If subtitle_text is empty or contains insufficient content, return a valid JSON object with empty arrays and brief explanatory fields in the same language.
 
-5. Timestamps requirements:
-   - Provide between 3 and 7 timestamp entries (only truly important moments).
-   - Format: use MM:SS for videos under 1 hour; use HH:MM:SS for videos 1 hour or longer (if video length unknown, default to MM:SS).
-   - Timestamps must be sorted ascending.
-   - If an exact timestamp cannot be determined from subtitle_text, provide the nearest approximate timestamp and append " (approx)" to the time value.
+                S — Style
+                - All textual output must be in the detected language of the subtitle_text.
+                - Preserve original wording and casing when extracting quotes.
+                - Write summaries in a clear, professional, and informative tone.
+                - Key points should be concise and actionable.
+                - Timestamp descriptions should be brief (10-30 words) and descriptive.
+                - Notes for reviewers should be helpful and constructive.
 
-6. Key points requirements:
-   - Provide 5–10 items.
-   - Each key point should be a single sentence or phrase (5–25 words).
-   - Order by importance (most important first).
+                P — Parameters (Hard constraints)
+                - Output MUST be a single valid JSON object. No markdown, no code fences, no trailing commas.
+                - Escape special characters to ensure JSON parses.
+                - Timestamp format: MM:SS for videos < 1 hour; HH:MM:SS for videos ≥ 1 hour. If video length unknown, default to MM:SS.
+                - Language: include a "language" field with ISO 639-1 code and language name (e.g., "en - English").
+                - Keys and structure must follow the exact JSON schema below (do not add top-level fields):
 
-7. Summary requirements:
-   - Main "summary" must be 2–3 paragraphs, each paragraph 2–4 sentences.
-   - Also include a "short_summary" (one sentence).
+                {{
+                "video_title": "{safe_video_title}",
+                "channel_name": "{safe_channel_name}",
+                "video_url": "{safe_video_url}",
+                "language": "xx - Language Name",
+                "summary": "A comprehensive summary of the video content in 2-3 paragraphs. Cover the main topics, key concepts, and the overall message, using the subtitle_text as the source.",
+                "short_summary": "A one-sentence summary (max 30 words) in the same language.",
+                "key_points": [
+                    "5-10 concise key points (each 5-25 words) that capture the main ideas; return exactly as many items as are needed between 5 and 10."
+                ],
+                "important_quotes": [
+                    {{
+                    "quote": "A short important quotation (up to 2 lines) from the subtitles (preserve original wording).",
+                    "time": "MM:SS or HH:MM:SS if video ≥ 1 hour"
+                    }}
+                ],
+                "timestamps": [
+                    {{
+                    "time": "MM:SS or HH:MM:SS if video ≥ 1 hour",
+                    "description": "Brief description (10-30 words) of what happens at this timestamp — major topic change, key example, or critical fact."
+                    }}
+                ],
+                "notes_for_reviewers": "Optional short suggestions (1-3 bullet-style sentences) about what to check in the transcript or where automatic subtitle errors may affect understanding."
+                }}
 
-8. Important quotes:
-   - Provide up to 3 quotes (if present in subtitles), include the exact quote and the timestamp.
-   - Preserve original punctuation and casing.
+                E — Examples
+                Example 1 — Normal case:
+                Input:
+                video_title: "How Neural Networks Learn"
+                channel_name: "AI Explained"
+                video_url: "https://youtube.com/abc123"
+                subtitle_text: "Today we learn how neural networks adjust weights... Backpropagation helps minimize loss..."
 
-9. JSON safety and validation:
-   - Ensure no trailing commas.
-   - Escape internal quotes and control characters so the JSON parses.
-   - Do not include any explanatory text outside the JSON object.
+                Output:
+                {{
+                "video_title": "How Neural Networks Learn",
+                "channel_name": "AI Explained",
+                "video_url": "https://youtube.com/abc123",
+                "language": "en - English",
+                "summary": "The video explains how neural networks adjust weights using backpropagation. It covers the fundamental concepts of gradient descent and error minimization. The explanation provides clear insights into the learning mechanism of artificial intelligence systems.",
+                "short_summary": "A clear introduction to how neural networks learn using backpropagation.",
+                "key_points": [
+                    "Neural networks improve by adjusting weights to reduce error.",
+                    "Backpropagation calculates gradients to guide learning.",
+                    "Gradient descent minimizes loss functions effectively."
+                ],
+                "important_quotes": [
+                    {{
+                    "quote": "Backpropagation is the learning engine of neural networks.",
+                    "time": "00:45"
+                    }}
+                ],
+                "timestamps": [
+                    {{
+                    "time": "00:10",
+                    "description": "Introduction to neural networks and learning process."
+                    }},
+                    {{
+                    "time": "00:45",
+                    "description": "Explanation of backpropagation mechanism."
+                    }}
+                ],
+                "notes_for_reviewers": "Verify auto-generated timestamps and quote extraction."
+                }}
 
-10. If subtitle_text is empty or contains insufficient content, return a valid JSON object with empty arrays and brief explanatory fields in the same language, e.g.:
-{{
-  "video_title": "...",
-  "channel_name": "...",
-  "video_url": "...",
-  "language": "en - English",
-  "summary": "",
-  "short_summary": "",
-  "key_points": [],
-  "important_quotes": [],
-  "timestamps": [],
-  "notes_for_reviewers": "Insufficient subtitle text to extract notes."
-}}
+                Example 2 — Empty subtitle case:
+                Input:
+                video_title: "Sample Video"
+                channel_name: "Sample Channel"
+                video_url: "https://youtube.com/xyz789"
+                subtitle_text: ""
 
-Begin analysis of the provided subtitle_text and produce the JSON output now."""
+                Output:
+                {{
+                "video_title": "Sample Video",
+                "channel_name": "Sample Channel",
+                "video_url": "https://youtube.com/xyz789",
+                "language": "en - English",
+                "summary": "",
+                "short_summary": "",
+                "key_points": [],
+                "important_quotes": [],
+                "timestamps": [],
+                "notes_for_reviewers": "Insufficient subtitle text to extract notes."
+                }}
+
+                BEGIN analysis of the provided subtitle_text and produce the JSON output now.
+                """
             
-            # Generate content
+            # Generate content using Gemini
             response = self.gemini_client.models.generate_content(
                 model=settings.GEMINI_MODEL,
                 contents=prompt
@@ -277,6 +341,7 @@ Begin analysis of the provided subtitle_text and produce the JSON output now."""
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to generate note with AI: {str(e)}"
             )
+
     
     # ============================================================================
     # HELPER METHODS - Pagination
